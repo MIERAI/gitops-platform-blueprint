@@ -1,0 +1,34 @@
+# 共用的 CI 模板: gitops-manifests 的 <app>/overlays/dev 的镜像 tag 更新(Argo CD 接着同步)。
+# 认证: gitops-manifests 的部署密钥(只对这一个仓库有写权限),调用方的 secret MANIFESTS_DEPLOY_KEY
+name: promote-dev
+on:
+  workflow_call:
+    inputs:
+      app: { type: string, required: true }
+      images: { description: "空格隔开的 <镜像>=<tag>(镜像 = ghcr.io/<owner>/<name>)", type: string, required: true }
+      manifests: { type: string, default: MIERAI/gitops-manifests }
+      env: { type: string, default: dev }
+    secrets:
+      MANIFESTS_DEPLOY_KEY: { required: true }
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    concurrency: { group: "promote-${{ inputs.app }}-${{ inputs.env }}", cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.manifests }}
+          ssh-key: ${{ secrets.MANIFESTS_DEPLOY_KEY }}
+      - name: 更新 tag 并推送(和别的应用同时推送时重试)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            scripts/set-image.sh "${{ inputs.app }}" "${{ inputs.env }}" ${{ inputs.images }}
+            if git diff --quiet; then echo "已经是这个版本"; exit 0; fi
+            git commit -qam "${{ inputs.app }} ${{ inputs.env }}: ${{ inputs.images }} (${{ github.repository }}@${GITHUB_SHA::7})"
+            git push -q origin HEAD:main && { echo "✓ pushed"; exit 0; }
+            sleep $((i * 3))
+          done
+          exit 1
