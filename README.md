@@ -89,6 +89,7 @@ scripts/down.sh
 | Concern | Implementation | Checked by |
 |---|---|---|
 | Progressive delivery | Argo Rollouts canary + Prometheus analysis (error ratio, p95), automatic abort | fault-injection runs (bad canary aborted in ~30s) |
+| Load tests | k6: in the canary analysis of sample-app (100 rps against the canary only; breach → abort), PostSync in api-factory dev (30 rps, per-RPC p95) | lock-contention fault: passed the metric-only canary, aborted in 53s with the load step |
 | Observability | kube-prometheus-stack: PodMonitors, SLO burn-rate alerts, Grafana dashboards, synthetic traffic | alerts carry runbook links |
 | Data | CloudNativePG (prod: primary + replica), WAL archiving + daily base backups to S3 (Barman Cloud plugin) | `infrastructure-live/scripts/restore-drill.sh` (PITR ~1 min), `failover-drill.sh` (25–49s) |
 | Admission policies | Kyverno (CEL): pinned images, resources, readiness probes, non-root; cosign signature of public images (identity: `build-image.yml` on main); reviewed exceptions only from the `kyverno` namespace | policy tests with good/bad fixtures + every overlay checked on the PR (`gitops-manifests/scripts/validate.sh`) |
@@ -97,7 +98,6 @@ scripts/down.sh
 
 - GKE: Terraform in infrastructure-live (VPC, GKE, Cloud SQL, Workload Identity) replacing the kind part
 - Secrets: External Secrets Operator
-- Load test as a deployment gate
 
 ---
 Status: the local (kind) reference implementation works end to end. GKE is not started yet.
