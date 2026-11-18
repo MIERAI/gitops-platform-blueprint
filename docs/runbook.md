@@ -56,7 +56,10 @@ lose everything since the last archived segment.
 2. Sidecar logs: `kubectl -n <ns> logs postgres-1 -c plugin-barman-cloud | grep -i error`
    - `Expected empty archive`: another cluster already archived under the same `destinationPath` / server name
      (e.g. a re-created cluster). Use a new prefix in the overlay's ObjectStore patch, or clear the old one if it is
-     really obsolete.
+     really obsolete. When re-creating a cluster under a new prefix, delete the old cluster **before** the new
+     prefix syncs (or clear the new prefix afterwards): the old cluster keeps archiving and would fill the new
+     prefix first (happened on kind, 2026-11-18). A re-created cluster also has no tables until the next sync runs
+     the schema hook: trigger a sync of the Application.
    - connection / credential errors: object store down (`kubectl -n object-storage get pods`) or Secret `backup-s3`
      differs from the object store's identity (both come from infrastructure-live `secrets/<cluster>.sops.yaml`:
      `tofu apply` for the Secret, `ansible-playbook site.yml --tags seaweedfs` for the laptop's host).
@@ -64,6 +67,24 @@ lose everything since the last archived segment.
    `kubectl -n <ns> create -f -` with a `Backup` (method `plugin`, pluginConfiguration
    `barman-cloud.cloudnative-pg.io`), or wait for the daily ScheduledBackup.
 4. Prove it: `scripts/restore-drill.sh <ns>` (≈1 min).
+
+## off-site-backup
+
+Alert: `OffsiteBackupStale` (ticket, laptop only). The hourly CronJob `backup-offsite/offsite-backup` copies the
+object store (all database backups + WAL) to the phone, encrypted by rclone crypt; it has not succeeded for 3 hours.
+The local backups are unaffected: this is the "laptop lost / house on fire" copy.
+
+1. `kubectl -n backup-offsite get jobs` and `kubectl -n backup-offsite logs job/<last>`
+2. Phone reachable? `tailscale status | grep <phone>`; Termux sshd running (Termux killed by battery optimisation →
+   open Termux, `sshd`). A host-key error means the phone's sshd key changed: update `known_hosts` in
+   gitops-manifests `platform/offsite-backup` only after confirming it on the phone itself.
+3. Run once now: `kubectl -n backup-offsite create job --from=cronjob/offsite-backup manual-$(date +%s)`
+
+Restore from the phone (the laptop is gone): on any machine with the age key, `sops decrypt
+infrastructure-live/secrets/laptop.sops.yaml` gives `offsite.crypt_password` / `crypt_salt`; configure an rclone
+`crypt` remote over `sftp` to the phone's `backups/gitops` (or copy that directory off the phone first) and
+`rclone copy <crypt>:cnpg <local object store>`; then restore with CloudNativePG `bootstrap.recovery` as in
+"Restore a database". Trash: files deleted at the source stay in `trash/<day>` for 14 days.
 
 ## database-replication
 
