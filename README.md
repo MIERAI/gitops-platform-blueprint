@@ -94,6 +94,14 @@ scripts/down.sh
 | Data | CloudNativePG (prod: primary + replica), WAL archiving + daily base backups to S3 (Barman Cloud plugin) | `infrastructure-live/scripts/restore-drill.sh` (PITR ~1 min), `failover-drill.sh` (25–49s) |
 | Admission policies | Kyverno (CEL): pinned images, resources, readiness probes, non-root; cosign signature of public images (identity: `build-image.yml` on main); reviewed exceptions only from the `kyverno` namespace | policy tests with good/bad fixtures + every overlay checked on the PR (`gitops-manifests/scripts/validate.sh`) |
 
+## Operating it
+
+- [Runbook](docs/runbook.md): one section per alert (linked from each alert's `runbook` annotation), rollback,
+  canary aborted, admission denied, database restore, platform rebuild.
+- [Lessons learned](docs/lessons.md): every problem hit while building this, with cause and fix.
+- Drills (infrastructure-live `scripts/`): `restore-drill.sh` (point-in-time recovery), `failover-drill.sh`
+  (primary loss under traffic), `rebuild-drill.sh` (whole platform from Git, timed). UIs: `ui.sh`.
+
 ## Roadmap
 
 - GKE: Terraform in infrastructure-live (VPC, GKE, Cloud SQL, Workload Identity) replacing the kind part
