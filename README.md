@@ -84,6 +84,16 @@ curl -s 'localhost:18082/hello?name=gitops'  # sample-app (dev)
 scripts/down.sh
 ```
 
+## Clusters
+
+| Cluster | Where | Purpose | Differences (gitops-manifests) |
+|---|---|---|---|
+| kind | workstation, on demand | experiments, rebuild drills (`rebuild-drill.sh`: whole platform from Git in ~5.5 min) | renders `apps/` |
+| laptop | k3s on an always-on Linux laptop (`TARGET=laptop`, host layer: `infrastructure-live/scripts/laptop-host.sh`) | the "cloud": runs 24/7 with synthetic traffic; alerts are read out loud by the laptop | `clusters/laptop`: object storage **outside** the cluster (host SeaweedFS on its own disk, backups survive a cluster rebuild), Alertmanager → speaker |
+
+Both clusters follow the same `main` of gitops-manifests. Limits of the laptop as a cloud: one machine (backups are
+outside the cluster but on the same host), no managed services, no IAM / Workload Identity, no public ingress.
+
 ## Platform (in the cluster)
 
 | Concern | Implementation | Checked by |
