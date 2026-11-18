@@ -68,6 +68,19 @@ lose everything since the last archived segment.
    `barman-cloud.cloudnative-pg.io`), or wait for the daily ScheduledBackup.
 4. Prove it: `scripts/restore-drill.sh <ns>` (≈1 min).
 
+## daily-restore-check
+
+Alert: `DailyRestoreCheckFailed` (ticket). The nightly CronJob `restore-check` (prod, 04:30 JST) restores the
+latest backups into a throwaway cluster and compares it with live; it has not succeeded for 26 hours. The live
+database is fine; what is in doubt is whether it could be restored.
+
+1. `kubectl -n api-factory-prod get jobs -l batch.kubernetes.io/cronjob-name=restore-check` and the last Job's log:
+   it names the failing step (heartbeat missing = WAL chain broken → see database-backups; a table or row count
+   differs = the base backup or WAL replay is incomplete; not healthy after 90 min = the restore itself).
+2. A leftover `restore-check` cluster is deleted by the next run; delete it by hand if disk is short.
+3. Run once now: `kubectl -n api-factory-prod create job --from=cronjob/restore-check manual-$(date +%s)`.
+4. Restore time trend: `restore_check:duration_seconds` (Prometheus).
+
 ## off-site-backup
 
 Alert: `OffsiteBackupStale` (ticket, laptop only). The hourly CronJob `backup-offsite/offsite-backup` copies the
