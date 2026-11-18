@@ -60,6 +60,12 @@ jobs:
   (signatures go to the public transparency log, which reveals the repository name, so signing is off by default for private repos).
 - `promote-dev`: updates only the image tag via `gitops-manifests/scripts/set-image.sh`; retries when several apps push at the same time.
 
+## Shipping a change
+
+`main` is protected in every repository (pull request + required checks). `scripts/ship.sh "<title>"` turns the
+commits on local `main` into a PR with auto-merge, waits until it is merged and syncs local `main`. It refuses to run
+with uncommitted changes or when there is nothing to ship.
+
 ## Design principles
 
 1. **Git is the single source of truth.** Manual changes in the cluster are reverted by Argo CD self-heal; every change and rollback is a commit.
