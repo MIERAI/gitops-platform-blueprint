@@ -84,12 +84,20 @@ curl -s 'localhost:18082/hello?name=gitops'  # sample-app (dev)
 scripts/down.sh
 ```
 
+## Platform (in the cluster)
+
+| Concern | Implementation | Checked by |
+|---|---|---|
+| Progressive delivery | Argo Rollouts canary + Prometheus analysis (error ratio, p95), automatic abort | fault-injection runs (bad canary aborted in ~30s) |
+| Observability | kube-prometheus-stack: PodMonitors, SLO burn-rate alerts, Grafana dashboards, synthetic traffic | alerts carry runbook links |
+| Data | CloudNativePG (prod: primary + replica), WAL archiving + daily base backups to S3 (Barman Cloud plugin) | `infrastructure-live/scripts/restore-drill.sh` (PITR ~1 min), `failover-drill.sh` (25–49s) |
+| Admission policies | Kyverno (CEL): pinned images, resources, readiness probes, non-root; cosign signature of public images (identity: `build-image.yml` on main); reviewed exceptions only from the `kyverno` namespace | policy tests with good/bad fixtures + every overlay checked on the PR (`gitops-manifests/scripts/validate.sh`) |
+
 ## Roadmap
 
 - GKE: Terraform in infrastructure-live (VPC, GKE, Cloud SQL, Workload Identity) replacing the kind part
-- Progressive delivery: Argo Rollouts (canary + metric analysis + automatic rollback)
-- Signature verification in the cluster (Kyverno / sigstore policy-controller)
 - Secrets: External Secrets Operator
+- Load test as a deployment gate
 
 ---
 Status: the local (kind) reference implementation works end to end. GKE is not started yet.
