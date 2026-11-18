@@ -71,6 +71,8 @@ jobs:
         run: cosign sign --yes "${{ steps.names.outputs.repo }}@${{ steps.push.outputs.digest }}"
       - name: 结果
         run: |
-          echo "### ${{ inputs.image }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- tag: \`${{ steps.names.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- digest: \`${{ steps.push.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### ${{ inputs.image }}"
+            echo "- tag: \`${{ steps.names.outputs.tag }}\`"
+            echo "- digest: \`${{ steps.push.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
