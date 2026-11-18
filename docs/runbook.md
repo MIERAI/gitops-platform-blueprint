@@ -58,7 +58,8 @@ lose everything since the last archived segment.
      (e.g. a re-created cluster). Use a new prefix in the overlay's ObjectStore patch, or clear the old one if it is
      really obsolete.
    - connection / credential errors: object store down (`kubectl -n object-storage get pods`) or Secret `backup-s3`
-     differs from the object store's identity (`scripts/secrets.sh`).
+     differs from the object store's identity (both come from infrastructure-live `secrets/<cluster>.sops.yaml`:
+     `tofu apply` for the Secret, `ansible-playbook site.yml --tags seaweedfs` for the laptop's host).
 3. After the fix, take a base backup right away so PITR does not depend on the gap:
    `kubectl -n <ns> create -f -` with a `Backup` (method `plugin`, pluginConfiguration
    `barman-cloud.cloudnative-pg.io`), or wait for the daily ScheduledBackup.
