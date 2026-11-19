@@ -37,7 +37,7 @@ graph LR
 1. **Pull request** in an app repo: tests (for api-factory: acceptance tests on 3 seeds plus mutation testing).
 2. **Merge to main**: the image is **built once** (tag = commit) → GHCR → Trivy (fails on fixable CRITICAL) → SBOM → cosign keyless signature (public repos).
 3. CI updates the tag in `gitops-manifests/<app>/overlays/dev`, using a deploy key that can write to that repository only.
-4. **Argo CD** detects the drift and syncs dev: ordered by sync waves → Sync hooks (api-factory: schema Job) → rolling update (the old version keeps serving until the new one is healthy) → PostSync smoke Job.
+4. **Argo CD** detects the drift and syncs dev: ordered by sync waves → init containers (api-factory: goose migrations) → rolling update (the old version keeps serving until the new one is healthy) → PostSync smoke Job.
 5. **Production**: the `promote` workflow in gitops-manifests opens a PR that copies the version running in dev to prod → a human approves and merges → Argo CD syncs.
 6. **Rollback**: `git revert` in gitops-manifests → Argo CD syncs back. Nobody touches the cluster directly.
 
