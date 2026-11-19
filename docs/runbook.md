@@ -31,8 +31,8 @@ Client errors (invalid_argument, not_found, unauthenticated, 4xx) do not count: 
    - database unreachable (`failed to connect … postgres-rw`) → `kubectl -n <ns> get cluster postgres`; a failover
      takes 25–49s ([database-replication](#database-replication)); longer → CloudNativePG operator logs
      (`kubectl -n cnpg-system logs deploy/cnpg-controller-manager`);
-   - `relation … does not exist` → the schema Job did not run or failed: `kubectl -n <ns> get jobs`, re-sync the
-     Application in Argo CD.
+   - `relation … does not exist` → the migrate init container failed: `kubectl -n <ns> logs deploy/api-factory -c migrate`; after the
+     fix `kubectl -n <ns> rollout restart deploy/api-factory`.
 
 ## latency
 
@@ -58,8 +58,8 @@ lose everything since the last archived segment.
      (e.g. a re-created cluster). Use a new prefix in the overlay's ObjectStore patch, or clear the old one if it is
      really obsolete. When re-creating a cluster under a new prefix, delete the old cluster **before** the new
      prefix syncs (or clear the new prefix afterwards): the old cluster keeps archiving and would fill the new
-     prefix first (happened on kind, 2026-11-18). A re-created cluster also has no tables until the next sync runs
-     the schema hook: trigger a sync of the Application.
+     prefix first (happened on kind, 2026-11-18). A re-created cluster has no tables until an api-factory Pod starts
+     (its migrate init container creates them): `kubectl -n <ns> rollout restart deploy/api-factory`.
    - connection / credential errors: object store down (`kubectl -n object-storage get pods`) or Secret `backup-s3`
      differs from the object store's identity (both come from infrastructure-live `secrets/<cluster>.sops.yaml`:
      `tofu apply` for the Secret, `ansible-playbook site.yml --tags seaweedfs` for the laptop's host).
@@ -71,13 +71,16 @@ lose everything since the last archived segment.
 ## daily-restore-check
 
 Alert: `DailyRestoreCheckFailed` (ticket). The nightly CronJob `restore-check` (prod, 04:30 JST) restores the
-latest backups into a throwaway cluster and compares it with live; it has not succeeded for 26 hours. The live
+latest backups into a throwaway cluster, compares it with live and rehearses the next release's migrations on it; it has not succeeded for 26 hours. The live
 database is fine; what is in doubt is whether it could be restored.
 
 1. `kubectl -n api-factory-prod get jobs -l batch.kubernetes.io/cronjob-name=restore-check` and the last Job's log:
    it names the failing step (heartbeat missing = WAL chain broken → see database-backups; a table or row count
    differs = the base backup or WAL replay is incomplete; not healthy after 90 min = the restore itself).
-2. A leftover `restore-check` cluster is deleted by the next run; delete it by hand if disk is short.
+   `✗ migration rehearsal failed`: the migrations of the version dev runs (the next release) failed on a copy of
+   prod's data (the log shows which one and how long each took). Do not promote it; fix forward with a new migration
+   (migrations are append-only) and let the next night's check (or a manual run) prove it.
+2. A leftover `restore-target` cluster is deleted by the next run; delete it by hand if disk is short.
 3. Run once now: `kubectl -n api-factory-prod create job --from=cronjob/restore-check manual-$(date +%s)`.
 4. Restore time trend: `restore_check:duration_seconds` (Prometheus).
 
