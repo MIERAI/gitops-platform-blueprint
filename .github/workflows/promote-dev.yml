@@ -19,6 +19,8 @@ jobs:
         with:
           repository: ${{ inputs.manifests }}
           ssh-key: ${{ secrets.MANIFESTS_DEPLOY_KEY }}
+      - name: PyYAML(manifests 仓库的脚本读 <app>/app.yaml)
+        run: python3 -c "import yaml" 2>/dev/null || sudo apt-get install -y -qq python3-yaml >/dev/null
       - name: 更新 tag 并推送(和别的应用同时推送时重试)
         run: |
           git config user.name "github-actions[bot]"
