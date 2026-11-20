@@ -18,11 +18,20 @@ unless noted.
 
 ## error-budget-burn
 
-Alerts: `SampleAppErrorBudgetFastBurn` (page), `ApiFactoryServerErrors` (page).
+Alerts: `ErrorBudgetBurn` (Pyrra, from the SLOs in each `app.yaml`) on an availability or probe SLO, e.g.
+`slo="api-factory-rpc-availability"`, `slo="api-factory-health-probe"`, `slo="sample-app-hello-availability"`.
+`severity: page` = fast burn (14× the budget rate over 1h and 5m) or medium burn (7× over 6h and 30m);
+`severity: ticket` = slow burn. `SLOMetricAbsent` (ticket): the SLI has no data, so the SLO cannot see anything.
 
-Server-side errors are consuming the error budget (sample-app: 14.4× burn = 2% of the 30-day budget per hour;
-api-factory: more than 1% of RPCs fail with internal / unavailable / unknown / deadline_exceeded / data_loss).
-Client errors (invalid_argument, not_found, unauthenticated, 4xx) do not count: they are the API working as specified.
+The labels say which SLO and environment; the SLO's description (Pyrra UI, or the app's `app.yaml`) says what counts
+as a bad event and what it cannot see. Client errors (invalid_argument, not_found, unauthenticated, 4xx) never count.
+
+- **probe SLO burning, in-pod availability quiet**: the requests do not reach a pod at all — no ready pod (for
+  api-factory: the readiness probe pings the database, so a database outage takes every pod out of the Service),
+  a broken Service. Start with `kubectl -n <ns> get pods,endpoints` and the database below. In a database outage
+  the API containers also restart every ~1 min (liveness uses the same database ping): a symptom, not the cause
+  (gitops-manifests experiment api-factory-db-partition: the probe paged after 6.6 min, the in-pod SLIs saw nothing).
+- **`SLOMetricAbsent`**: no pod is exporting the metric (all down or restarting), or the metric / label was renamed.
 
 1. Grafana dashboard of the app: is it one route / RPC or all of them? One environment or both?
 2. Logs: `kubectl -n <ns> logs deploy/api-factory --since=15m | grep ERROR` (api-factory logs the RPC and the error).
@@ -36,7 +45,10 @@ Client errors (invalid_argument, not_found, unauthenticated, 4xx) do not count: 
 
 ## latency
 
-Alerts: `SampleAppHighLatency` (ticket, p95 /hello > 300ms), `ApiFactoryHighLatency` (ticket, p95 RPC > 500ms).
+Alerts: `ErrorBudgetBurn` on a latency SLO (`slo="…-latency"`, e.g. `api-factory-rpc-latency`: 99% of RPCs within
+100ms; `sample-app-hello-latency`: 99% of /hello within 250ms). Same severities as
+[error-budget-burn](#error-budget-burn). A latency SLO counts every request, failed ones included: requests that hang
+until a timeout burn it together with the availability SLO.
 
 1. Grafana: did latency rise with traffic (capacity) or at a deployment (regression)?
 2. Regression → [Rollback](#rollback). The canary load test exists to stop exactly this (a lock-contention
