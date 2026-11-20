@@ -1,4 +1,5 @@
-# 共用的 CI 模板: gitops-manifests 的 <app>/overlays/dev 的镜像 tag 更新(Argo CD 接着同步)。
+# 共用的 CI 模板: gitops-manifests 里 <app> 的 dev 的镜像更新(Argo CD 接着同步)。哪个文件: <app>/app.yaml。
+# 镜像名可以和 manifests 里的不同(fork: ghcr.io/<你>/<name>):按最后一段认出是同一个镜像,改成你的(newName / repository)。
 # 认证: gitops-manifests 的部署密钥(只对这一个仓库有写权限),调用方的 secret MANIFESTS_DEPLOY_KEY
 name: promote-dev
 on:
@@ -6,7 +7,7 @@ on:
     inputs:
       app: { type: string, required: true }
       images: { description: "空格隔开的 <镜像>=<tag>(镜像 = ghcr.io/<owner>/<name>)", type: string, required: true }
-      manifests: { type: string, default: MIERAI/gitops-manifests }
+      manifests: { description: "owner/name; default: <the caller's owner>/gitops-manifests (a fork works as is)", type: string, default: "" }
       env: { type: string, default: dev }
     secrets:
       MANIFESTS_DEPLOY_KEY: { required: true }
@@ -17,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          repository: ${{ inputs.manifests }}
+          repository: ${{ inputs.manifests || format('{0}/gitops-manifests', github.repository_owner) }}
           ssh-key: ${{ secrets.MANIFESTS_DEPLOY_KEY }}
       - name: PyYAML(manifests 仓库的脚本读 <app>/app.yaml)
         run: python3 -c "import yaml" 2>/dev/null || sudo apt-get install -y -qq python3-yaml >/dev/null
