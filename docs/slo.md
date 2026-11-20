@@ -140,7 +140,22 @@ The budget is `100% − objective` of the window's events (99.5% over 28 days �
 | fast burn during a rollout | roll back first, investigate second |
 
 Exceptions (a budget spent by a dependency outside our control, a bad SLI) are decided explicitly and written in the
-postmortem, not silently ignored. The delivery board's promotion gate is the place to enforce this automatically.
+postmortem, not silently ignored.
+
+**Enforced by the delivery board's promotion gate** (MIERAI/delivery-board `docs/error-budget.md`) for promotions into
+prod. The budget is the lowest of the application's SLOs in prod, from Pyrra: `(availability − objective) / (1 −
+objective)` over 28 days, plus its fast-burn alert. A promotion declares `change: feature | fix | exception` and a
+`reason`. These are inputs of gitops-manifests `promote.yml` and the board's Promote form, and are written into the
+promotion PR as `Change:` / `Reason:`.
+
+- **> 25%:** passes.
+- **0–25%:** needs a reason.
+- **Exhausted or fast burn:** only `fix` (fixes, reliability work, rollbacks) or `exception`, each with a reason.
+- **Unknown budget** (no SLO, no data, Prometheus unreachable): **fails closed**, like an exhausted budget. A missing SLI is
+  not a healthy one (§2), and an unknown budget is an exception decided explicitly. Fixes still ship.
+
+The board shows each app's verdict and judges an open promotion PR's declaration. It does not block the merge itself;
+a person does.
 
 ## 7. Postmortems
 
