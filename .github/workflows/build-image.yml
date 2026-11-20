@@ -11,12 +11,14 @@ on:
       sign: { description: "cosign 无密钥签名(签名记录进公开的透明日志: 私有仓库的名字会公开)", type: boolean, default: false }
       fail-on-critical: { description: "有可修复的 CRITICAL 漏洞时失败", type: boolean, default: true }
     outputs:
+      name: { description: "ghcr.io/<owner>/<image> (the caller's owner, lower case)", value: "${{ jobs.build.outputs.name }}" }
       tag: { value: "${{ jobs.build.outputs.tag }}" }
       digest: { value: "${{ jobs.build.outputs.digest }}" }
 jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
+      name: ${{ steps.names.outputs.repo }}
       tag: ${{ steps.names.outputs.tag }}
       digest: ${{ steps.push.outputs.digest }}
     steps:
