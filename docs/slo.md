@@ -44,6 +44,9 @@ Pick the SLI by the **shape** of the service, not by the service. One representa
   process ready?" — neither pings the database. Otherwise a database outage restarts every pod in a loop and takes
   them all out of the Service: users get connection refused instead of an error, the in-pod SLIs count nothing, the
   restarts clear the counters. A deep check (`/healthz`) is for the external probe only.
+- **Probes tolerate slowness.** With the default 1s timeout, a 600ms network delay on storefront api made both
+  pods fail readiness and liveness: they left the Service and restarted, slowness became an outage, and the latency SLO
+  never burned (calls failed fast). Readiness 3s; liveness only detects a stuck process: 5s × 6 before a restart.
 - **Two latency thresholds.** A mild one (e.g. 99% under 100 ms) burns slowly — a +200 ms database paged after 15
   min, ≈4% of the budget, by design; a severe one (99.9% under 1 s) pages within minutes when slowness is as bad as
   an outage.
