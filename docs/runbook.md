@@ -57,6 +57,27 @@ until a timeout burn it together with the availability SLO.
    slow queries in the Postgres logs). Scale through Git (overlay `replicas`), never with `kubectl scale`: Argo CD
    would revert it.
 
+## order-pipeline
+
+Alerts: `ErrorBudgetBurn` on `storefront-order-freshness` (an order older than 60s is still pending) or
+`storefront-order-completeness` (orders not processed within 5 minutes) — page; `SLOMetricAbsent` on them — ticket.
+
+The pipeline: web takes `POST /orders` and writes them pending into the storefront Postgres; the worker (2 replicas)
+claims them (`FOR UPDATE SKIP LOCKED`), processes, marks them done. web reports the pipeline from the database every
+10s (`orders_pending`, `orders_oldest_pending_age_seconds`, `orders_processed_through_timestamp_seconds`), so the
+numbers survive a dead worker.
+
+1. Grafana / Prometheus: `orders_pending{namespace="<ns>"}` growing and `orders_oldest_pending_age_seconds` rising →
+   nothing is processing; pending flat but old → processing too slowly.
+2. Worker: `kubectl -n <ns> get pods -l app=worker`; crash loop → `kubectl -n <ns> logs deploy/worker --previous`;
+   a recent worker release → [Rollback](#rollback).
+3. Slow processing: worker logs (per-order duration), the database (`kubectl -n <ns> get cluster postgres`); more
+   replicas through Git (`storefront/worker/values-<env>.yaml`), never `kubectl scale`.
+4. Only `SLOMetricAbsent` on freshness, plus an order-intake page: the database is unreachable (web cannot read the
+   pipeline nor take orders) → `kubectl -n <ns> get cluster postgres`, CloudNativePG operator logs.
+5. One order fails forever (a poison order) is not handled yet: it would hold freshness down — find it with
+   `SELECT id, created_at FROM orders WHERE status = 'pending' ORDER BY created_at LIMIT 5` (read-only).
+
 ## database-backups
 
 Alerts: `ErrorBudgetBurn` on SLO `api-factory-recovery-point` (page on fast / medium burn), on SLO
