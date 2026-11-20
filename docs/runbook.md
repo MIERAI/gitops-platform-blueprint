@@ -47,10 +47,16 @@ Alerts: `SampleAppHighLatency` (ticket, p95 /hello > 300ms), `ApiFactoryHighLate
 
 ## database-backups
 
-Alerts: `PostgresWalArchivingFailing` (page), `PostgresWalArchivingStale` (page).
+Alerts: `ErrorBudgetBurn` on SLO `api-factory-recovery-point` (page on fast / medium burn), on SLO
+`api-factory-base-backup` (ticket); `PostgresWalArchivingFailing` (ticket, the cause).
 
-WAL is not reaching the object store, so the point-in-time recovery window is not advancing: a loss now would
-lose everything since the last archived segment.
+- **recovery-point**: a WAL segment has waited for archiving 10 minutes on end (`cnpg:wal_archive_keeps_up:bool` = 0):
+  WAL is not reaching the object store, so the point-in-time recovery window is not advancing: a loss now would
+  lose everything since the last archived segment, and `pg_wal` keeps growing until the volume is full (the
+  database stops). An idle database is fine: no WAL is written, nothing is archived, nothing is at risk.
+- **base-backup**: the newest base backup is older than 26 hours (last night's `ScheduledBackup` failed or did not
+  run). The recovery point is intact while WAL is archived; a restore just replays more WAL.
+  `kubectl -n <ns> get backups` (phase, error), then the steps below.
 
 1. `kubectl -n <ns> get cluster postgres -o jsonpath='{.status.conditions[?(@.type=="ContinuousArchiving")]}'`
 2. Sidecar logs: `kubectl -n <ns> logs postgres-1 -c plugin-barman-cloud | grep -i error`
@@ -70,8 +76,9 @@ lose everything since the last archived segment.
 
 ## daily-restore-check
 
-Alert: `DailyRestoreCheckFailed` (ticket). The nightly CronJob `restore-check` (prod, 04:30 JST) restores the
-latest backups into a throwaway cluster, compares it with live and rehearses the next release's migrations on it; it has not succeeded for 26 hours. The live
+Alert: `ErrorBudgetBurn` on SLO `api-factory-restore-check` (ticket). The nightly CronJob `restore-check` (prod,
+04:30 JST) restores the latest backups into a throwaway cluster, compares it with live and rehearses the next
+release's migrations on it; it has not succeeded for 26 hours (or never: `SLOMetricAbsent`). The live
 database is fine; what is in doubt is whether it could be restored.
 
 1. `kubectl -n api-factory-prod get jobs -l batch.kubernetes.io/cronjob-name=restore-check` and the last Job's log:
@@ -86,8 +93,9 @@ database is fine; what is in doubt is whether it could be restored.
 
 ## off-site-backup
 
-Alert: `OffsiteBackupStale` (ticket, laptop only). The hourly CronJob `backup-offsite/offsite-backup` copies the
-object store (all database backups + WAL) to the phone, encrypted by rclone crypt; it has not succeeded for 3 hours.
+Alert: `ErrorBudgetBurn` on SLO `platform-offsite-backup` (ticket, laptop only). The hourly CronJob
+`backup-offsite/offsite-backup` copies the object store (all database backups + WAL) to the phone, encrypted by
+rclone crypt; it has not succeeded for 3 hours (or never: `SLOMetricAbsent`).
 The local backups are unaffected: this is the "laptop lost / house on fire" copy.
 
 1. `kubectl -n backup-offsite get jobs` and `kubectl -n backup-offsite logs job/<last>`
