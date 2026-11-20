@@ -14,7 +14,11 @@ on:
 jobs:
   promote:
     runs-on: ubuntu-latest
-    concurrency: { group: "promote-${{ inputs.app }}-${{ inputs.env }}", cancel-in-progress: false }
+    # one queue per service (the caller's release workflow), not per app: GitHub keeps one running and ONE waiting run
+    # per group and cancels the waiting one when a third arrives — a monorepo releasing web, api and worker at once
+    # lost the worker's promotion (image built, never set in dev). Services in parallel are safe: the push retries.
+    # Within a service, a newer release replacing a waiting older one is what we want.
+    concurrency: { group: "promote-${{ inputs.app }}-${{ inputs.env }}-${{ github.workflow }}", cancel-in-progress: false }
     steps:
       - uses: actions/checkout@v7
         with:
