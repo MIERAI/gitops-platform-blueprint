@@ -1,8 +1,15 @@
 # GitOps Platform Blueprint
 
-Blueprint and shared building blocks for application delivery where **Git is the single source of truth**.
-The reference implementation currently runs end to end on a **local kind cluster**; GKE / Terraform are the parts
-designed to be swapped in later without changing the delivery flow.
+> The SLO platform that grew out of this blueprint is now a versioned product: **[slo-platform](https://github.com/MIERAI/slo-platform)**
+> (install from one `platform.yaml`; burn-rate alerts verified daily by fault experiments). Start there; its
+> [docs](https://github.com/MIERAI/slo-platform/tree/main/docs) are the maintained version of this repo's SLO
+> principles and runbook.
+
+Blueprint and shared building blocks for application delivery where **Git is the single source of truth**: the
+design principles, the shared CI (reusable workflows) every application uses, and the lessons learned building it.
+The reference installation runs on two personal k3s clusters, `laptop` (prod) and `lab` (fault experiments, daily
+regression), as an slo-platform instance ([gitops-manifests](https://github.com/MIERAI/gitops-manifests)); a kind
+cluster is the demo anyone can run.
 
 ## Architecture
 
@@ -15,7 +22,7 @@ graph LR
     end
     Main -->|shared CI: promote-dev<br/>deploy key| Dev[gitops-manifests<br/>overlays/dev]
     Dev -->|promote workflow<br/>PR + human approval| Prod[overlays/prod]
-    subgraph cluster["kind cluster (infrastructure-live)"]
+    subgraph cluster["k3s clusters laptop / lab (infrastructure-live)"]
         Argo[Argo CD] -->|compare & sync every 30s| NS1[dev namespaces]
         Argo --> NS2[prod namespaces]
     end
@@ -26,9 +33,10 @@ graph LR
 
 | Repository | Responsibility | Contents |
 |---|---|---|
+| [slo-platform](https://github.com/MIERAI/slo-platform) | The product: SLOs, burn-rate alerts, experiments, regression | Versioned (`vX.Y.Z`); an instance pins it in `platform.yaml` |
 | **gitops-platform-blueprint** (this repo) | Architecture + **shared CI** (reusable workflows) | `build-image.yml`, `promote-dev.yml` |
-| [infrastructure-live](https://github.com/MIERAI/infrastructure-live) | Platform: hosts, clusters, Argo CD, runtime secrets | OpenTofu (`tofu/`: clusters + Argo CD + secrets + root app), Ansible (`ansible/`: hosts), SOPS-encrypted secrets |
-| [gitops-manifests](https://github.com/MIERAI/gitops-manifests) | Desired state: apps × environments | One directory per application (`app.yaml` + kustomize / Helm), an ApplicationSet, admission policies, `promote` workflow |
+| [infrastructure-live](https://github.com/MIERAI/infrastructure-live) | Bootstrap: hosts, clusters, Argo CD, runtime secrets | OpenTofu (`tofu/`: clusters + Argo CD + secrets + root app = slo-platform), Ansible (`ansible/`: hosts), SOPS-encrypted secrets |
+| [gitops-manifests](https://github.com/MIERAI/gitops-manifests) | Desired state: the slo-platform instance | `platform.yaml`, one directory per application (`app.yaml` + kustomize / Helm), experiments, per-cluster extras, `promote` workflow |
 | [sample-app](https://github.com/MIERAI/sample-app) | Public reference application | Minimal Go HTTP service + CI |
 | [storefront](https://github.com/MIERAI/storefront) | Monorepo reference application | Three services (kustomize + Helm) released and promoted on their own, dev → staging → prod |
 | delivery-board (private) | Every change from PR to prod, promotion gates | Go; pipelines discovered from the `app.yaml` files |
@@ -87,8 +95,8 @@ with uncommitted changes or when there is nothing to ship.
 1. **Git is the single source of truth.** Manual changes in the cluster are reverted by Argo CD self-heal; every change and rollback is a commit.
 2. **Separation of concerns.** Platform (infrastructure-live), desired state (gitops-manifests) and applications have independent lifecycles.
 3. **Build once.** Images are never rebuilt per environment: prod runs exactly the tag verified in dev.
-4. **No secrets in Git.** Manifests only reference secrets (`secretKeyRef`); values live SOPS/age-encrypted in infrastructure-live and are applied by OpenTofu (on GKE: Secret Manager + External Secrets).
-5. **Least privilege.** CI → gitops-manifests via a repo-scoped deploy key; images via `GITHUB_TOKEN`; cloud access via Workload Identity Federation once on GKE.
+4. **No secrets in Git.** Manifests only reference secrets (`secretKeyRef`); values live SOPS/age-encrypted in infrastructure-live and are applied by OpenTofu.
+5. **Least privilege.** CI → gitops-manifests via a repo-scoped deploy key; images via `GITHUB_TOKEN`.
 
 ## Run it locally
 
@@ -105,10 +113,11 @@ tofu -chdir=tofu/kind destroy
 
 | Cluster | Where | Purpose | Differences (gitops-manifests) |
 |---|---|---|---|
-| kind | workstation, on demand | experiments, rebuild drills (`rebuild-drill.sh`: whole platform from Git in ~5.5 min) | renders `apps/` |
-| laptop | k3s on an always-on Linux laptop (`TARGET=laptop`; host layer: Ansible `infrastructure-live/ansible`, platform: `tofu/laptop`) | the "cloud": runs 24/7 with synthetic traffic; alerts are read out loud by the laptop | `clusters/laptop`: object storage **outside** the cluster (host SeaweedFS on its own disk, backups survive a cluster rebuild), Alertmanager → speaker |
+| laptop | k3s on an always-on Linux laptop (`TARGET=laptop`; host layer: Ansible `infrastructure-live/ansible`, platform: `tofu/laptop`) | prod, the "cloud": runs 24/7 with synthetic traffic; alerts are read out loud by the laptop | slo-platform cluster `laptop` + `clusters/laptop/extras`: object storage **outside** the cluster (host SeaweedFS on its own disk, backups survive a cluster rebuild), speakers, delivery board, off-site backup |
+| lab | k3s on xiaoxin (`tofu/lab`) | fault experiments and slo-platform's daily regression; notifies nobody | slo-platform cluster `lab` + `clusters/lab/extras` |
+| kind | workstation, on demand | the demo, rebuild drills (`rebuild-drill.sh`: whole platform from Git in ~5.5 min) | renders the pre-slo-platform root `apps/` |
 
-Both clusters follow the same `main` of gitops-manifests. Limits of the laptop as a cloud: one machine (backups are
+All clusters follow the same `main` of gitops-manifests. Limits of the laptop as a cloud: one machine (backups are
 outside the cluster but on the same host), no managed services, no IAM / Workload Identity, no public ingress.
 
 ## Platform (in the cluster)
@@ -123,7 +132,7 @@ outside the cluster but on the same host), no managed services, no IAM / Workloa
 
 ## Operating it
 
-- [Runbook](docs/runbook.md): one section per alert (linked from each alert's `runbook` annotation), rollback,
+- [Runbook](docs/runbook.md) (maintained version: [slo-platform `docs/runbook.md`](https://github.com/MIERAI/slo-platform/blob/main/docs/runbook.md)): one section per alert (linked from each alert's `runbook` annotation), rollback,
   canary aborted, admission denied, database restore, platform rebuild.
 - [Lessons learned](docs/lessons.md): every problem hit while building this, with cause and fix.
 - Drills (infrastructure-live `scripts/`): `restore-drill.sh` (point-in-time recovery), `failover-drill.sh`
@@ -131,8 +140,10 @@ outside the cluster but on the same host), no managed services, no IAM / Workloa
 
 ## Roadmap
 
-- GKE: Terraform in infrastructure-live (VPC, GKE, Cloud SQL, Workload Identity) replacing the kind part
-- Secrets: External Secrets Operator
+The product's roadmap lives in [slo-platform `docs/roadmap.md`](https://github.com/MIERAI/slo-platform/blob/main/docs/roadmap.md).
+A managed-cloud version (GKE, Workload Identity, Secret Manager / External Secrets) is an optional idea for later; no
+code for it exists.
 
 ---
-Status: the local (kind) reference implementation works end to end. GKE is not started yet.
+Status: running on the laptop + lab k3s clusters as an slo-platform instance; the kind demo runs in CI on every change
+and every week.

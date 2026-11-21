@@ -1,5 +1,8 @@
 # Service level objectives
 
+> **Maintained version:** slo-platform [`docs/concepts.md`](https://github.com/MIERAI/slo-platform/blob/main/docs/concepts.md) (and [`configuration.md`](https://github.com/MIERAI/slo-platform/blob/main/docs/configuration.md) for how SLOs are declared).
+> This page is where the principles started and is kept for history; slo-platform's docs are what is kept current.
+
 How the platform decides what is "reliable enough", when a human is woken up, and what happens when an application
 is not reliable enough. The rules here are what [gitops-manifests](https://github.com/MIERAI/gitops-manifests) implements
 (SLOs declared in each `app.yaml`, rendered by the platform into [Pyrra](https://github.com/pyrra-dev/pyrra) objectives
