@@ -1,5 +1,8 @@
 # Runbook
 
+> **Maintained version:** [slo-platform `docs/runbook.md`](https://github.com/MIERAI/slo-platform/blob/main/docs/runbook.md).
+> This page is where the principles started and is kept for history; slo-platform's alerts link to its runbook, not here.
+
 What to do when an alert fires or a delivery step fails. Every alert's `runbook` annotation links to a section here.
 
 - **page**: users are affected now → act immediately.
@@ -210,5 +213,5 @@ rehearse and to estimate the time (≈1 min for the demo data). For a real recov
 
 `scripts/rebuild-drill.sh --yes` deletes the kind cluster and `.secrets/`, rebuilds everything from Git and runs
 smoke checks, printing the time of each phase. **Data is not covered**: the object store with the backups runs in
-the same cluster and is deleted with it (on GKE the backups go to a GCS bucket outside the cluster); databases come
+the same cluster and is deleted with it (a cloud version would keep the backups outside the cluster); databases come
 back empty and dev is re-seeded.
